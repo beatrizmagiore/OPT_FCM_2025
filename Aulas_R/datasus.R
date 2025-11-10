@@ -65,3 +65,77 @@ ggplot(dados)+
 
 ggplot(dados)+
   geom_boxplot(aes(x = factor(Ano), y = incidencia))
+
+
+# Aula 30/10
+
+library(tidyverse)
+
+devtools::install_github("danicat/read.dbc")
+
+dados <- read.dbc::read.dbc("Dados/DENGBR24.dbc")
+
+nrow(dados)
+names(dados)
+
+# separar municipios de SP (35xxxx)
+dados_sp <- dados %>% 
+  filter(grepl("^35", ID_MN_RESI))
+
+# remover 'dados' para liberar memória
+rm(dados)
+
+
+# trabalhar com conjunto de dados muito grandes
+library(duckdb)
+
+con <- dbConnect(duckdb::duckdb(), dbdir = "Dados/meu_banco.duckdb")
+dbWriteTable(con, "dados", dados_sp, overwrite = TRUE)
+
+dbGetQuery(con, "DESCRIBE dados")
+
+
+##################################################################
+
+# Aula 04/11
+
+library(tidyverse)
+
+
+roda_arquivo <- function(arquivo){
+  dados_simdo <- read.dbc::read.dbc(arquivo)
+  
+  dados <- dados_simdo %>% 
+    select(DTOBITO, CAUSABAS_O) %>% 
+    mutate(
+      dataobito = as.Date(DTOBITO, "%d%m%Y")
+    )
+  
+  dados <- dados %>% 
+    mutate(
+      semana = floor(as.integer(dataobito - as.Date("2015-01-01"))/7 + 1),
+      diasemana = as.Date("2015-01-01") + 7*(semana-1),
+      estado = str_remove(arquivo, ".*DO"),
+      estado = str_remove(estado, "\\d{4}\\.dbc")
+    )
+  
+  return(dados)
+}
+
+roda_arquivo("Dados/DATASUS/DOAC2015.dbc")
+
+arquivos <- list.files("Dados/DATASUS/", full.names = TRUE)
+
+resultados <- map(arquivos, roda_arquivo)
+
+dados <- Reduce(rbind, resultados)
+
+dados %>%
+  group_by(diasemana, estado) %>% 
+  summarise(
+    n = n()
+  ) %>% 
+  ungroup() %>% 
+  ggplot(aes(x = diasemana, y = n, color = estado))+
+  geom_line()+
+  theme_minimal()
