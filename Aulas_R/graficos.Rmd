@@ -12,8 +12,11 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r, include=FALSE}
 library(tidyverse)
 library(rcartocolor)
-```
+library(utf8)
 
+cores <- carto_pal(12, "Bold")
+scales::show_col(cores)
+```
 
 ## GGPLOT
 
@@ -24,7 +27,7 @@ dados <- read.csv("Dados/Pokemon_full.csv")
 summary(dados)
 ```
 
-# Box-plot
+### Box-plot
 
 ```{r, fig.align='center'}
 
@@ -50,6 +53,7 @@ ggplot(df, aes(x = classe_altura, y = weight, fill = classe_altura))+
       y = "Peso"
     )+
     scale_y_continuous(trans = "log10")+
+    scale_fill_manual(values = cores[c(1,2,3,7)])+
     theme_minimal()+
     theme(
       axis.text = element_text(size = 11),
@@ -58,22 +62,23 @@ ggplot(df, aes(x = classe_altura, y = weight, fill = classe_altura))+
     )
 
 ```
+\pagebreak
 
-# Gráfico de pontos
+### Gráfico de pontos
 
 ```{r, fig.align='center'}
+
 df %>% 
   arrange(desc(classe_altura)) %>% 
   ggplot(aes(x = weight, y = height, color = classe_altura))+
   geom_point()+
     labs(
-      x = "Peso",
-      y = "Altura",
-      color = "Classe altura"
+      x = "Peso", y = "Altura", color = "Classe altura"
     )+
     guides(color = guide_legend(override.aes = list(size = 3)))+
     scale_x_continuous(trans = "log10")+
     scale_y_continuous(trans = "log10")+
+    scale_color_manual(values = cores[c(1,2,3,7)])+
     theme_minimal()+
     theme(
       axis.text = element_text(size = 11),
@@ -82,5 +87,89 @@ df %>%
       legend.text = element_text(size = 10),
       legend.title = element_text(size = 11, face = "bold")
     )
+
 ```
 
+\pagebreak
+
+### Gráficos facetados
+
+```{r}
+
+df %>% 
+  group_by(classe_altura) %>% 
+  summarise(
+    media_h = mean(height),
+    media_w = mean(weight)
+  ) %>% 
+  pivot_longer(cols = c(2,3), values_to = "Valor", names_to = "Tipo") %>% 
+  mutate(
+    Tipo = recode(Tipo,
+                  "media_h" = "Média Altura",
+                  "media_w" = "Média Peso")
+  ) %>% 
+  ggplot(aes(x = Tipo, y = Valor, fill = classe_altura))+
+  geom_col()+
+  labs(
+      x = "Tipo", y = "Valor", fill = "Classe Altura"
+    )+
+  facet_wrap(.~classe_altura)+
+  theme_minimal()+
+  theme(
+      axis.text = element_text(size = 11),
+      axis.title = element_text(size = 13,face = "bold"),
+      legend.position = "none"
+    )
+
+```
+
+### Gráfico de dois eixos
+
+```{r}
+
+df_media <- df %>% 
+  group_by(classe_altura) %>% 
+  summarise(
+    media_h = mean(height),
+    media_w = mean(weight)
+  ) %>% 
+  pivot_longer(cols = c(2,3), values_to = "Valor", names_to = "Tipo") %>% 
+  mutate(
+    Medida = case_when(
+      grepl("_h", Tipo) ~ "Altura",
+      TRUE ~ "Peso"
+    )
+  )
+
+max_altura <- df_media %>% 
+  filter(Medida == "Altura") %>% 
+  arrange(desc(Valor)) %>% 
+  distinct(Medida, .keep_all = TRUE) %>% 
+  pull(Valor)
+
+max_peso <- df_media %>% 
+  filter(Medida == "Peso") %>% 
+  arrange(desc(Valor)) %>% 
+  distinct(Medida, .keep_all = TRUE) %>% 
+  pull(Valor)
+
+fator = max_peso/max_altura
+
+df_media %>% 
+  mutate(
+    Valor2 = ifelse(Medida == "Altura", Valor*fator, Valor)
+  ) %>% 
+  ggplot(aes(x = classe_altura, y = Valor2, fill = Medida))+
+  geom_col(position = position_dodge2())+
+    labs(
+      x = "Classe Altura", y = "Média do Peso", fill = "Média"
+    )+
+    scale_y_continuous(sec.axis = sec_axis(~./fator, name = "Média da Altura"))+
+    theme_minimal()+
+    theme(
+      axis.text = element_text(size = 11),
+      axis.title = element_text(size = 13,face = "bold"),
+      legend.position = "none"
+    )
+
+```
