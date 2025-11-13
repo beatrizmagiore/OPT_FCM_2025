@@ -173,3 +173,93 @@ df_media %>%
     )
 
 ```
+
+\pagebreak
+
+## Mapa dengue em SP
+
+
+```{r, echo=FALSE}
+library(sf)
+```
+
+```{r}
+dados <- read.csv2("Dados/dengue_sp.csv")
+head(dados)
+```
+
+
+```{r}
+
+dados <- dados %>% 
+  rename(municipio = 1)
+
+```
+
+Garantindo que o conjunto de dados só tenha municípios válidos
+
+```{r}
+
+dados <- dados %>% 
+  filter(grepl("^\\d{6}", municipio)) %>% 
+  mutate(across(starts_with("x"), as.integer)) %>% 
+  replace(is.na(.), 0)
+
+df <- dados %>% 
+  pivot_longer(2:13, names_to = "Ano", values_to = "Casos") %>% 
+  filter(Ano != "Total") %>% 
+  mutate(Ano = str_remove(Ano, "X")) %>% 
+  mutate(Cod = str_extract(municipio, "\\d{6}"))
+
+```
+
+Lendo dados da população
+
+```{r}
+
+pop <- read.csv2("Dados/tabela4709.csv", skip = 3)
+names(pop) <- c("Cod", "Municipio", "Populacao")
+
+pop <- pop %>% 
+  mutate(Cod = str_extract(Cod, "\\d{6}"))
+```
+
+```{r}
+df <- df %>% 
+  left_join(pop) %>% 
+  mutate(
+    taxa = Casos/Populacao*10000
+  )
+```
+
+Lendo o arquivo SHP
+
+```{r}
+sp_shp <- read_sf("Dados/SHP/cidades_SP.shp")
+```
+
+
+Juntar os dados
+
+```{r}
+
+df <- sp_shp %>% 
+  mutate(Cod = str_extract(CD_GEOCODM, "\\d{6}")) %>% 
+  select(Cod, geometry) %>% 
+  right_join(df)
+
+```
+
+Gráfico
+
+```{r}
+
+ggplot(df)+
+  geom_sf(aes(color = taxa))+
+  scale_colour_viridis_c()+
+  labs(colour = "Taxa de incidencia")+
+  facet_wrap(.~Ano)+
+  theme_minimal()
+
+```
+
